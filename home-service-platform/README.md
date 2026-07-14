@@ -80,3 +80,74 @@ curl http://localhost:8081/api/v1/users/me \
 ## Next: Phase 3
 Worker profile CRUD, worker search, and the booking state machine — building on this
 authenticated foundation.
+
+---
+
+# Phase 3 — Marketplace & Booking (added)
+
+Builds on the Phase 1/2 auth foundation. Migration **V2** adds categories,
+worker skills, worker locations, and bookings, and seeds the 7 service categories.
+
+## New capabilities
+
+**Categories**
+- `GET /api/v1/categories` — list service categories (public reference data)
+
+**Worker profile & marketplace** (worker self-service is `WORKER`-role-gated)
+- `GET  /api/v1/workers/me` — my worker profile + skills
+- `PATCH /api/v1/workers/me` — update bio, experience, hourly rate, availability
+- `POST /api/v1/workers/me/skills` — add a skill category (1–5 proficiency)
+- `PUT  /api/v1/workers/me/location` — set my current lat/lng
+- `GET  /api/v1/workers/{id}` — view any worker's public profile
+- `GET  /api/v1/workers/search?category=1&lat=..&lng=..&radiusKm=25` — ranked nearby workers
+
+**Bookings** (state machine enforced)
+- `POST   /api/v1/bookings` — create (optionally pre-assign a worker)
+- `GET    /api/v1/bookings` — my bookings (homeowner or worker view, auto-detected by role)
+- `GET    /api/v1/bookings/{id}` — booking detail (participants only)
+- `PATCH  /api/v1/bookings/{id}/accept` — worker accepts (PENDING → CONFIRMED)
+- `PATCH  /api/v1/bookings/{id}/start` — (CONFIRMED/EN_ROUTE → IN_PROGRESS)
+- `PATCH  /api/v1/bookings/{id}/complete` — (IN_PROGRESS → COMPLETED)
+- `PATCH  /api/v1/bookings/{id}/cancel` — cancel with reason
+
+## Booking state machine
+```
+PENDING ──accept──► CONFIRMED ──► EN_ROUTE ──► IN_PROGRESS ──► COMPLETED
+   │                    │             │              │
+   └──── cancel ────────┴─────────────┴──────────────┴──► CANCELLED
+                                                    (or DISPUTED from IN_PROGRESS)
+```
+Transitions are validated on the `Booking` entity itself — an illegal move (e.g.
+completing a PENDING booking) throws and surfaces as HTTP 409 Conflict.
+
+## Worker search ranking
+Available + verified workers with the requested skill are pulled, distance is
+computed via Haversine from the requester's coordinates, and each is scored by a
+weighted blend: `score = 2.0*rating − 1.0*distanceKm`, sorted high-to-low,
+filtered to `radiusKm`. Linear scan (MVP-first); KD-Tree is the documented
+scale-up path.
+
+## Testing Phase 3 (after logging in as a worker)
+```bash
+# Worker sets availability + a skill + location so they're searchable.
+# (Workers must be is_verified=TRUE to appear in search — flip that in the DB
+#  for testing, since admin verification isn't built yet:)
+#   UPDATE workers SET is_verified = TRUE WHERE id = '<worker-uuid>';
+
+curl -X POST http://localhost:8081/api/v1/workers/me/skills \
+  -H "Authorization: Bearer <workerToken>" -H "Content-Type: application/json" \
+  -d '{"categoryId":1,"proficiencyLevel":4}'
+
+curl -X PUT http://localhost:8081/api/v1/workers/me/location \
+  -H "Authorization: Bearer <workerToken>" -H "Content-Type: application/json" \
+  -d '{"latitude":8.033,"longitude":79.828}'
+
+# Homeowner searches for plumbers (category 1) nearby:
+curl "http://localhost:8081/api/v1/workers/search?category=1&lat=8.03&lng=79.83&radiusKm=25" \
+  -H "Authorization: Bearer <homeownerToken>"
+```
+
+## Note on worker verification
+`is_verified` defaults to FALSE and search only returns verified workers. Admin
+verification endpoints aren't built yet — for now, set the flag directly in the
+DB when testing. That's a natural early item for a later phase.

@@ -29,6 +29,22 @@ public class GlobalExceptionHandler {
         return problem(HttpStatus.UNAUTHORIZED, "Invalid email or password", req);
     }
 
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ProblemDetail handleNotFound(ResourceNotFoundException ex, HttpServletRequest req) {
+        return problem(HttpStatus.NOT_FOUND, ex.getMessage(), req);
+    }
+
+    @ExceptionHandler(ForbiddenActionException.class)
+    public ProblemDetail handleForbidden(ForbiddenActionException ex, HttpServletRequest req) {
+        return problem(HttpStatus.FORBIDDEN, ex.getMessage(), req);
+    }
+
+    // Invalid booking state-machine transitions surface as 409 Conflict.
+    @ExceptionHandler(IllegalStateException.class)
+    public ProblemDetail handleIllegalState(IllegalStateException ex, HttpServletRequest req) {
+        return problem(HttpStatus.CONFLICT, ex.getMessage(), req);
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ProblemDetail handleValidation(MethodArgumentNotValidException ex, HttpServletRequest req) {
         Map<String, String> fieldErrors = new LinkedHashMap<>();
