@@ -45,6 +45,11 @@ public class GlobalExceptionHandler {
         return problem(HttpStatus.CONFLICT, ex.getMessage(), req);
     }
 
+    @ExceptionHandler(com.homeservice.ai.gemini.GeminiException.class)
+    public ProblemDetail handleGemini(com.homeservice.ai.gemini.GeminiException ex, HttpServletRequest req) {
+        return problem(HttpStatus.BAD_GATEWAY, "AI service error: " + ex.getMessage(), req);
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ProblemDetail handleValidation(MethodArgumentNotValidException ex, HttpServletRequest req) {
         Map<String, String> fieldErrors = new LinkedHashMap<>();
