@@ -39,16 +39,25 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
 
         String token = header.substring(PREFIX.length());
-        String username = jwtService.extractUsername(token);
 
-        if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-            if (jwtService.isTokenValid(token, userDetails)) {
-                var authToken = new UsernamePasswordAuthenticationToken(
-                        userDetails, null, userDetails.getAuthorities());
-                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(authToken);
+        // A malformed or EXPIRED token must not crash the filter — we simply
+        // leave the request unauthenticated so Spring Security returns a clean
+        // 401. That 401 is what lets the frontend silently refresh and retry.
+        try {
+            String username = jwtService.extractUsername(token);
+
+            if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+                if (jwtService.isTokenValid(token, userDetails)) {
+                    var authToken = new UsernamePasswordAuthenticationToken(
+                            userDetails, null, userDetails.getAuthorities());
+                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(authToken);
+                }
             }
+        } catch (Exception ex) {
+            // Expired/invalid/malformed token — proceed unauthenticated (-> 401).
+            SecurityContextHolder.clearContext();
         }
 
         filterChain.doFilter(request, response);
