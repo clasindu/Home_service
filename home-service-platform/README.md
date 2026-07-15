@@ -151,3 +151,61 @@ curl "http://localhost:8081/api/v1/workers/search?category=1&lat=8.03&lng=79.83&
 `is_verified` defaults to FALSE and search only returns verified workers. Admin
 verification endpoints aren't built yet — for now, set the flag directly in the
 DB when testing. That's a natural early item for a later phase.
+
+---
+
+# Phase 4 — AI Diagnosis Agent (text-only, added)
+
+The centerpiece: a Gemini-powered conversational diagnosis agent with a
+deterministic hazard-override safety layer. **Text-only in this phase**; image
+analysis is the next step.
+
+## Setup — REQUIRES a Gemini API key
+Get a free key from Google AI Studio (aistudio.google.com), then set it:
+```powershell
+$env:GEMINI_API_KEY="your-gemini-key"
+```
+Model defaults to `gemini-2.0-flash` (override with `$env:GEMINI_MODEL`).
+
+Migration **V3** adds `ai_conversations`, `ai_messages`, `diagnosis_reports`.
+
+## Endpoints (all require auth)
+- `POST /api/v1/ai/conversations` — start a diagnosis conversation, returns conversationId
+- `POST /api/v1/ai/conversations/{id}/messages` — send a message, get the agent's reply
+
+## How it works
+1. Each user message is persisted, then the full conversation history is replayed
+   to Gemini with a system prompt that enforces a strict JSON output contract
+   (reply, category, severityCandidate, followUpQuestion, diyGuidance, complete).
+2. The JSON is parsed server-side. If Gemini returns non-JSON, its text is used
+   as a plain reply and the conversation continues (no crash).
+3. The **hazard-override safety layer** scans all user text for danger keywords
+   (gas, sparking, shock, exposed wire, tripping breaker, etc.) and can only
+   ESCALATE severity, never soften it. Escalation forces a professional referral
+   and suppresses DIY steps. This hybrid (LLM + deterministic veto) is the core
+   research contribution.
+4. When a diagnosis is complete, a DiagnosisReport row is persisted.
+
+## Test flow (after logging in)
+```powershell
+$h = @{ Authorization = "Bearer <accessToken>" }
+
+# Start a conversation
+$c = Invoke-RestMethod -Method Post -Headers $h http://localhost:8081/api/v1/ai/conversations
+$cid = $c.conversationId
+
+# Send a message
+$body = @{ message = "My kitchen sink is leaking under the cabinet" } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Headers $h -ContentType "application/json" `
+  -Body $body "http://localhost:8081/api/v1/ai/conversations/$cid/messages"
+
+# Try a hazard message to see the safety layer escalate:
+$body2 = @{ message = "I smell gas near the stove" } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Headers $h -ContentType "application/json" `
+  -Body $body2 "http://localhost:8081/api/v1/ai/conversations/$cid/messages"
+```
+
+## Not yet built (next steps for Phase 4)
+- Image upload + Gemini Vision analysis
+- Hand-off from a completed diagnosis into the worker recommendation/booking flow
+- Retrieve full conversation + report endpoints

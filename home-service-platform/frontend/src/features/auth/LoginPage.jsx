@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import AuthLayout from '../../components/AuthLayout'
+import TextField from '../../components/TextField'
+import PrimaryButton from '../../components/PrimaryButton'
 
 export default function LoginPage() {
   const { login } = useAuth()
@@ -18,47 +21,55 @@ export default function LoginPage() {
       await login(email, password)
       navigate('/dashboard')
     } catch (err) {
-      setError(err.response?.data?.detail || 'Login failed')
+      setError(err.response?.data?.detail || 'Those details didn’t match. Try again.')
     } finally {
       setSubmitting(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="w-full max-w-sm bg-white p-8 rounded-xl shadow">
-        <h1 className="text-2xl font-semibold mb-6">Sign in</h1>
-        {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
-        <div className="space-y-4">
-          <input
-            className="w-full border rounded px-3 py-2"
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <input
-            className="w-full border rounded px-3 py-2"
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          <button
-            onClick={onSubmit}
-            disabled={submitting}
-            className="w-full bg-blue-600 text-white rounded py-2 disabled:opacity-50"
-          >
-            {submitting ? 'Signing in…' : 'Sign in'}
-          </button>
+    <AuthLayout>
+      <h1 className="font-display text-3xl font-bold tracking-tight text-ink_black">
+        Welcome back
+      </h1>
+      <p className="mt-2 text-ink_black-600">
+        Sign in to manage your bookings and diagnoses.
+      </p>
+
+      {error && (
+        <div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
         </div>
-        <p className="mt-4 text-sm text-gray-600">
-          No account?{' '}
-          <Link className="text-blue-600" to="/register">
-            Register
-          </Link>
-        </p>
-      </div>
-    </div>
+      )}
+
+      <form onSubmit={onSubmit} className="mt-8 space-y-5">
+        <TextField
+          label="Email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          autoComplete="email"
+        />
+        <TextField
+          label="Password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="••••••••"
+          autoComplete="current-password"
+        />
+        <PrimaryButton type="submit" disabled={submitting}>
+          {submitting ? 'Signing in…' : 'Sign in'}
+        </PrimaryButton>
+      </form>
+
+      <p className="mt-8 text-sm text-ink_black-600">
+        New here?{' '}
+        <Link to="/register" className="font-semibold text-steel_blue hover:text-fresh_sky">
+          Create an account
+        </Link>
+      </p>
+    </AuthLayout>
   )
 }
