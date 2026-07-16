@@ -35,4 +35,7 @@ public interface WorkerRepository extends JpaRepository<Worker, UUID> {
               AND w.is_verified = TRUE
             """, nativeQuery = true)
     List<WorkerCandidate> findAvailableCandidates(@Param("categoryId") Integer categoryId);
+
+    // Admin: list workers awaiting verification.
+    List<Worker> findByVerifiedFalse();
 }

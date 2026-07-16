@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { CalendarClock, MapPin, Loader2, CheckCircle2, XCircle, CalendarPlus } from 'lucide-react'
+import { CalendarClock, MapPin, Loader2, CheckCircle2, XCircle, CalendarPlus, PlayCircle } from 'lucide-react'
 import api from '../../lib/api'
+import { useAuth } from '../../context/AuthContext'
 import TopNav from '../../components/TopNav'
 import StatusBadge from './StatusBadge'
 
@@ -9,13 +10,16 @@ const DEFAULT_LAT = 6.9271
 const DEFAULT_LNG = 79.8612
 
 /**
- * Bookings hub. If arrived from search with ?worker=&category=, shows a
- * create-booking form at the top. Always lists the user's existing bookings
- * below, with cancel/complete actions where the booking state allows.
+ * Bookings hub — role-aware.
+ *  - HOMEOWNER: can create a booking (from a search hand-off) and see their bookings.
+ *  - WORKER: sees incoming job requests with accept / start / complete actions;
+ *    never sees the "create booking" form (a worker doesn't book other workers).
  */
 export default function BookingsPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const isWorker = user?.role === 'WORKER'
 
   const preWorkerId = searchParams.get('worker')
   const preCategoryId = searchParams.get('category')
@@ -47,13 +51,17 @@ export default function BookingsPage() {
             <CalendarClock size={22} />
           </span>
           <div>
-            <h1 className="font-display text-xl font-bold text-ink_black">My Bookings</h1>
-            <p className="text-sm text-ink_black-600">Request a visit and track its progress.</p>
+            <h1 className="font-display text-xl font-bold text-ink_black">
+              {isWorker ? 'Job Requests' : 'My Bookings'}
+            </h1>
+            <p className="text-sm text-ink_black-600">
+              {isWorker ? 'Review and respond to booking requests.' : 'Request a visit and track its progress.'}
+            </p>
           </div>
         </div>
 
-        {/* Create-booking form (only when arriving from search with a worker) */}
-        {preWorkerId && preCategoryId && (
+        {/* Create-booking form only for homeowners arriving from search */}
+        {!isWorker && preWorkerId && preCategoryId && (
           <CreateBookingForm
             workerId={preWorkerId}
             categoryId={preCategoryId}
@@ -65,12 +73,12 @@ export default function BookingsPage() {
 
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-16 text-ink_black-600">
-            <Loader2 size={20} className="animate-spin" /> Loading bookings…
+            <Loader2 size={20} className="animate-spin" /> Loading…
           </div>
         ) : bookings && bookings.length > 0 ? (
           <div className="space-y-4">
             {bookings.map((b) => (
-              <BookingCard key={b.id} booking={b} onChanged={loadBookings} />
+              <BookingCard key={b.id} booking={b} isWorker={isWorker} onChanged={loadBookings} />
             ))}
           </div>
         ) : (
@@ -78,16 +86,22 @@ export default function BookingsPage() {
             <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
               <CalendarClock size={26} />
             </span>
-            <h3 className="mt-4 font-display text-lg font-bold text-ink_black">No bookings yet</h3>
+            <h3 className="mt-4 font-display text-lg font-bold text-ink_black">
+              {isWorker ? 'No job requests yet' : 'No bookings yet'}
+            </h3>
             <p className="mt-1 max-w-sm text-sm text-ink_black-600">
-              Diagnose an issue or find a professional to make your first booking.
+              {isWorker
+                ? 'When a customer books you, their request will appear here.'
+                : 'Diagnose an issue or find a professional to make your first booking.'}
             </p>
-            <button
-              onClick={() => navigate('/search')}
-              className="mt-6 rounded-xl bg-gradient-to-r from-steel_blue to-fresh_sky px-5 py-3 font-display text-sm font-semibold text-white shadow-lg shadow-fresh_sky/25 transition hover:-translate-y-0.5"
-            >
-              Find a professional
-            </button>
+            {!isWorker && (
+              <button
+                onClick={() => navigate('/search')}
+                className="mt-6 rounded-xl bg-gradient-to-r from-steel_blue to-fresh_sky px-5 py-3 font-display text-sm font-semibold text-white shadow-lg shadow-fresh_sky/25 transition hover:-translate-y-0.5"
+              >
+                Find a professional
+              </button>
+            )}
           </div>
         )}
       </main>
@@ -161,7 +175,7 @@ function CreateBookingForm({ workerId, categoryId, onCreated }) {
   )
 }
 
-function BookingCard({ booking, onChanged }) {
+function BookingCard({ booking, isWorker, onChanged }) {
   const [busy, setBusy] = useState(false)
 
   const act = async (action) => {
@@ -170,7 +184,7 @@ function BookingCard({ booking, onChanged }) {
       await api.patch(`/bookings/${booking.id}/${action}`)
       onChanged()
     } catch {
-      // keep it simple; a fuller UI would surface the specific error
+      // a fuller UI would surface the specific error
     } finally {
       setBusy(false)
     }
@@ -189,41 +203,52 @@ function BookingCard({ booking, onChanged }) {
         <StatusBadge status={booking.status} />
       </div>
 
-      {booking.workerName && (
-        <p className="text-sm text-ink_black-600">Professional: <span className="font-medium text-ink_black">{booking.workerName}</span></p>
-      )}
+      {/* Workers see who requested; homeowners see the assigned pro */}
+      {isWorker
+        ? booking.homeownerName && (
+            <p className="text-sm text-ink_black-600">Customer: <span className="font-medium text-ink_black">{booking.homeownerName}</span></p>
+          )
+        : booking.workerName && (
+            <p className="text-sm text-ink_black-600">Professional: <span className="font-medium text-ink_black">{booking.workerName}</span></p>
+          )}
+
       {booking.address && (
         <p className="mt-1 flex items-center gap-1 text-sm text-ink_black-600">
           <MapPin size={14} /> {booking.address}
         </p>
       )}
-      {booking.description && (
-        <p className="mt-2 text-sm text-ink_black-600">{booking.description}</p>
-      )}
+      {booking.description && <p className="mt-2 text-sm text-ink_black-600">{booking.description}</p>}
       {booking.cancellationReason && (
         <p className="mt-2 text-sm text-red-600">Cancelled: {booking.cancellationReason}</p>
       )}
 
-      {canCancel && (
-        <div className="mt-4 flex gap-2">
-          <button
-            onClick={() => act('cancel')}
-            disabled={busy}
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-ink_black transition hover:bg-slate-50 disabled:opacity-50"
-          >
+      <div className="mt-4 flex flex-wrap gap-2">
+        {/* Worker actions: accept a pending request, start a confirmed job */}
+        {isWorker && booking.status === 'PENDING' && (
+          <button onClick={() => act('accept')} disabled={busy}
+            className="inline-flex items-center gap-1 rounded-lg bg-gradient-to-r from-steel_blue to-fresh_sky px-4 py-2 text-sm font-medium text-white transition hover:-translate-y-0.5 disabled:opacity-50">
+            <CheckCircle2 size={15} /> Accept
+          </button>
+        )}
+        {isWorker && booking.status === 'CONFIRMED' && (
+          <button onClick={() => act('start')} disabled={busy}
+            className="inline-flex items-center gap-1 rounded-lg bg-baltic_blue px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50">
+            <PlayCircle size={15} /> Start job
+          </button>
+        )}
+        {booking.status === 'IN_PROGRESS' && (
+          <button onClick={() => act('complete')} disabled={busy}
+            className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:opacity-50">
+            <CheckCircle2 size={15} /> Mark complete
+          </button>
+        )}
+        {canCancel && (
+          <button onClick={() => act('cancel')} disabled={busy}
+            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-ink_black transition hover:bg-slate-50 disabled:opacity-50">
             <XCircle size={15} /> Cancel
           </button>
-          {booking.status === 'IN_PROGRESS' && (
-            <button
-              onClick={() => act('complete')}
-              disabled={busy}
-              className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:opacity-50"
-            >
-              <CheckCircle2 size={15} /> Mark complete
-            </button>
-          )}
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }

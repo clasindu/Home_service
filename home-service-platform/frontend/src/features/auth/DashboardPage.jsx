@@ -1,6 +1,8 @@
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Sparkles, Search, CalendarClock, Wrench, MapPin, Star, ArrowRight } from 'lucide-react'
+import { Sparkles, Search, CalendarClock, Wrench, MapPin, Star, ArrowRight, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
+import api from '../../lib/api'
 import TopNav from '../../components/TopNav'
 import dashboardHero from '../../assets/dashboard-hero.jpg'
 
@@ -13,8 +15,25 @@ export default function DashboardPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const isWorker = user?.role === 'WORKER'
+  const isAdmin = user?.role === 'ADMIN'
 
   const firstName = (user?.fullName || '').split(' ')[0] || 'there'
+
+  // Load real dashboard numbers from the user's bookings.
+  const [counts, setCounts] = useState(null)
+  useEffect(() => {
+    if (isAdmin) return
+    api.get('/bookings')
+      .then(({ data }) => {
+        const active = data.filter((b) =>
+          ['PENDING', 'CONFIRMED', 'EN_ROUTE', 'IN_PROGRESS'].includes(b.status)).length
+        const completed = data.filter((b) => b.status === 'COMPLETED').length
+        setCounts({ total: data.length, active, completed })
+      })
+      .catch(() => setCounts({ total: 0, active: 0, completed: 0 }))
+  }, [isAdmin])
+
+  const show = (n) => (counts == null ? '—' : String(n))
 
   const homeownerCards = [
     {
@@ -70,18 +89,29 @@ export default function DashboardPage() {
     },
   ]
 
-  const cards = isWorker ? workerCards : homeownerCards
+  const adminCards = [
+    {
+      title: 'Verify workers',
+      body: 'Review and approve workers so they appear in customer searches.',
+      icon: ShieldCheck,
+      accent: 'from-steel_blue to-fresh_sky',
+      to: '/admin/verify',
+      cta: 'Open verification queue',
+    },
+  ]
+
+  const cards = isAdmin ? adminCards : isWorker ? workerCards : homeownerCards
 
   const stats = isWorker
     ? [
-        { label: 'Active requests', value: '—', icon: CalendarClock },
-        { label: 'Your rating', value: '—', icon: Star },
-        { label: 'Jobs completed', value: '—', icon: Wrench },
+        { label: 'Active requests', value: show(counts?.active), icon: CalendarClock },
+        { label: 'Your rating', value: user?.rating ? Number(user.rating).toFixed(1) : '—', icon: Star },
+        { label: 'Jobs completed', value: show(counts?.completed), icon: Wrench },
       ]
     : [
-        { label: 'Open bookings', value: '—', icon: CalendarClock },
-        { label: 'Diagnoses run', value: '—', icon: Sparkles },
-        { label: 'Saved pros', value: '—', icon: Star },
+        { label: 'Open bookings', value: show(counts?.active), icon: CalendarClock },
+        { label: 'Total bookings', value: show(counts?.total), icon: Sparkles },
+        { label: 'Completed', value: show(counts?.completed), icon: Star },
       ]
 
   return (
@@ -95,17 +125,19 @@ export default function DashboardPage() {
             {/* Text side */}
             <div className="px-8 py-10 sm:px-10 md:py-12">
               <p className="text-sm font-semibold text-steel_blue">
-                {isWorker ? 'Professional dashboard' : 'Welcome home'}
+                {isAdmin ? 'Admin dashboard' : isWorker ? 'Professional dashboard' : 'Welcome home'}
               </p>
               <h1 className="mt-2 font-display text-3xl font-bold text-ink_black sm:text-4xl">
                 Hi {firstName} 👋
               </h1>
               <p className="mt-3 max-w-md text-ink_black-600">
-                {isWorker
+                {isAdmin
+                  ? 'Review workers awaiting verification to keep the marketplace trusted.'
+                  : isWorker
                   ? 'Keep your profile sharp and respond to job requests to win more work.'
                   : 'Something need fixing? Start with a quick AI diagnosis, then book a trusted local pro.'}
               </p>
-              {!isWorker && (
+              {!isWorker && !isAdmin && (
                 <button
                   onClick={() => navigate('/diagnose')}
                   className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-steel_blue to-fresh_sky px-5 py-3 font-display text-sm font-semibold text-white shadow-lg shadow-fresh_sky/25 transition hover:-translate-y-0.5"
@@ -126,6 +158,7 @@ export default function DashboardPage() {
         </section>
 
         {/* Quick stats */}
+        {!isAdmin && (
         <section className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
           {stats.map((s) => {
             const Icon = s.icon
@@ -142,11 +175,12 @@ export default function DashboardPage() {
             )
           })}
         </section>
+        )}
 
         {/* Feature cards */}
         <section className="mt-8">
           <h2 className="mb-4 font-display text-lg font-bold text-ink_black">
-            {isWorker ? 'Manage your work' : 'What would you like to do?'}
+            {isAdmin ? 'Admin tools' : isWorker ? 'Manage your work' : 'What would you like to do?'}
           </h2>
           <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
             {cards.map((c) => {

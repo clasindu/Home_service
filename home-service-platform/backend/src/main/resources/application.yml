@@ -4,8 +4,8 @@ spring:
 
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:home_service}
-    username: postgres
-    password: {DB_PASSWORD:postgres}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
 
   jpa:
     hibernate:
@@ -33,3 +33,9 @@ logging:
   level:
     com.homeservice: DEBUG
     org.springframework.security: INFO
+
+# --- Groq AI configuration (OpenAI-compatible chat completions API) ---
+groq:
+  api-key: ${GROQ_API_KEY:}
+  model: ${GROQ_MODEL:llama-3.3-70b-versatile}
+  base-url: https://api.groq.com/openai/v1
