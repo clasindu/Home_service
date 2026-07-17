@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { CalendarClock, MapPin, Loader2, CheckCircle2, XCircle, CalendarPlus, PlayCircle } from 'lucide-react'
+import { CalendarClock, MapPin, Loader2, CheckCircle2, XCircle, CalendarPlus, PlayCircle, Star } from 'lucide-react'
 import api from '../../lib/api'
 import { useAuth } from '../../context/AuthContext'
 import TopNav from '../../components/TopNav'
@@ -249,6 +249,80 @@ function BookingCard({ booking, isWorker, onChanged }) {
           </button>
         )}
       </div>
+
+      {/* Homeowner can rate the worker once the job is completed */}
+      {!isWorker && booking.status === 'COMPLETED' && booking.workerId && (
+        <RatingSection booking={booking} onRated={onChanged} />
+      )}
+    </div>
+  )
+}
+
+function RatingSection({ booking, onRated }) {
+  const [stars, setStars] = useState(0)
+  const [hover, setHover] = useState(0)
+  const [comment, setComment] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+
+  // Already reviewed — show a thank-you instead of the form.
+  if (booking.reviewed) {
+    return (
+      <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+        ✓ Thanks for rating this professional.
+      </div>
+    )
+  }
+
+  const submit = async () => {
+    if (stars < 1) { setError('Please pick a star rating.'); return }
+    setError('')
+    setSubmitting(true)
+    try {
+      await api.post('/reviews', { bookingId: booking.id, stars, comment: comment.trim() || null })
+      onRated()
+    } catch {
+      setError('Could not submit your rating. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <p className="mb-2 text-sm font-semibold text-ink_black">Rate {booking.workerName || 'this professional'}</p>
+      <div className="flex items-center gap-1">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <button
+            key={i}
+            type="button"
+            onMouseEnter={() => setHover(i)}
+            onMouseLeave={() => setHover(0)}
+            onClick={() => setStars(i)}
+            className="transition"
+          >
+            <Star
+              size={26}
+              className={(hover || stars) >= i ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}
+            />
+          </button>
+        ))}
+      </div>
+      <textarea
+        value={comment}
+        onChange={(e) => setComment(e.target.value)}
+        rows={2}
+        placeholder="Add a comment (optional)"
+        className="mt-3 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-ink_black placeholder:text-slate-400 focus:border-fresh_sky focus:outline-none focus:ring-4 focus:ring-fresh_sky/15"
+      />
+      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      <button
+        onClick={submit}
+        disabled={submitting}
+        className="mt-3 rounded-lg bg-gradient-to-r from-steel_blue to-fresh_sky px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-fresh_sky/25 transition hover:-translate-y-0.5 disabled:opacity-60"
+      >
+        {submitting ? 'Submitting…' : 'Submit rating'}
+      </button>
     </div>
   )
 }
