@@ -29,6 +29,7 @@ public class BookingService {
     private final IssueCategoryRepository categoryRepository;
     private final WorkerRepository workerRepository;
     private final CurrentUserProvider currentUser;
+    private final com.homeservice.review.repository.ReviewRepository reviewRepository;
 
     @Transactional
     public BookingDto create(CreateBookingRequest req) {
@@ -154,6 +155,7 @@ public class BookingService {
                 b.getLatitude(),
                 b.getLongitude(),
                 b.getCancellationReason(),
-                b.getCreatedAt());
+                b.getCreatedAt(),
+                reviewRepository.existsByBookingId(b.getId()));
     }
 }
