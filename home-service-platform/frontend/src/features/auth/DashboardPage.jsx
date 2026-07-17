@@ -21,6 +21,7 @@ export default function DashboardPage() {
 
   // Load real dashboard numbers from the user's bookings.
   const [counts, setCounts] = useState(null)
+  const [workerRating, setWorkerRating] = useState(null)
   useEffect(() => {
     if (isAdmin) return
     api.get('/bookings')
@@ -31,7 +32,14 @@ export default function DashboardPage() {
         setCounts({ total: data.length, active, completed })
       })
       .catch(() => setCounts({ total: 0, active: 0, completed: 0 }))
-  }, [isAdmin])
+
+    // Workers: fetch their profile to show their real rating.
+    if (isWorker) {
+      api.get('/workers/me')
+        .then(({ data }) => setWorkerRating(data.avgRating))
+        .catch(() => {})
+    }
+  }, [isAdmin, isWorker])
 
   const show = (n) => (counts == null ? '—' : String(n))
 
@@ -105,7 +113,7 @@ export default function DashboardPage() {
   const stats = isWorker
     ? [
         { label: 'Active requests', value: show(counts?.active), icon: CalendarClock },
-        { label: 'Your rating', value: user?.rating ? Number(user.rating).toFixed(1) : '—', icon: Star },
+        { label: 'Your rating', value: workerRating != null ? Number(workerRating).toFixed(1) : '—', icon: Star },
         { label: 'Jobs completed', value: show(counts?.completed), icon: Wrench },
       ]
     : [
