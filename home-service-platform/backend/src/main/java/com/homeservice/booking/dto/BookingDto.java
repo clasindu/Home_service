@@ -20,6 +20,7 @@ public record BookingDto(
         double latitude,
         double longitude,
         String cancellationReason,
-        Instant createdAt
+        Instant createdAt,
+        boolean reviewed
 ) {
 }
